@@ -90,6 +90,8 @@ func TestPreload(t *testing.T) {
 			}
 		} else if len(user.Emails) != 0 {
 			t.Errorf("should not preload any emails for other users when with condition")
+		} else if user.Emails == nil {
+			t.Errorf("should return an empty slice to indicate zero results")
 		}
 	}
 }
@@ -592,8 +594,14 @@ func TestNestedPreload9(t *testing.T) {
 		},
 		Level2_1: Level2_1{
 			Level1s: []Level1{
-				{Value: "value3-3"},
-				{Value: "value4-4"},
+				{
+					Value: "value3-3",
+					Level0s: []Level0{},
+				},
+				{
+					Value: "value4-4",
+					Level0s: []Level0{},
+				},
 			},
 		},
 	}
@@ -657,6 +665,7 @@ func TestNestedPreload10(t *testing.T) {
 		},
 		{
 			Value: "bar 2",
+			LevelA3s: []*LevelA3{},
 		},
 	}
 	for _, levelA2 := range want {
@@ -1500,6 +1509,88 @@ func TestNilPointerSlice2(t *testing.T) {
 
 	got := new(Level1)
 	err := DB.Preload("Level2.Level3s.Level4").Last(&got).Error
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %s; want %s", toJSONString(got), toJSONString(want))
+	}
+}
+
+func TestPrefixedPreloadDuplication(t *testing.T) {
+	type (
+		Level4 struct {
+			ID       uint
+			Name     string
+			Level3ID uint
+		}
+		Level3 struct {
+			ID      uint
+			Name    string
+			Level4s []*Level4
+		}
+		Level2 struct {
+			ID       uint
+			Name     string
+			Level3ID sql.NullInt64 `sql:"index"`
+			Level3   *Level3
+		}
+		Level1 struct {
+			ID       uint
+			Name     string
+			Level2ID sql.NullInt64 `sql:"index"`
+			Level2   *Level2
+		}
+	)
+
+	DB.DropTableIfExists(new(Level3))
+	DB.DropTableIfExists(new(Level4))
+	DB.DropTableIfExists(new(Level2))
+	DB.DropTableIfExists(new(Level1))
+
+	if err := DB.AutoMigrate(new(Level3), new(Level4), new(Level2), new(Level1)).Error; err != nil {
+		t.Error(err)
+	}
+
+	lvl := &Level3{}
+	if err := DB.Save(lvl).Error; err != nil {
+		t.Error(err)
+	}
+
+	sublvl1 := &Level4{Level3ID: lvl.ID}
+	if err := DB.Save(sublvl1).Error; err != nil {
+		t.Error(err)
+	}
+	sublvl2 := &Level4{Level3ID: lvl.ID}
+	if err := DB.Save(sublvl2).Error; err != nil {
+		t.Error(err)
+	}
+
+	lvl.Level4s = []*Level4{sublvl1, sublvl2}
+
+	want1 := Level1{
+		Level2: &Level2{
+			Level3: lvl,
+		},
+	}
+	if err := DB.Save(&want1).Error; err != nil {
+		t.Error(err)
+	}
+
+	want2 := Level1{
+		Level2: &Level2{
+			Level3: lvl,
+		},
+	}
+	if err := DB.Save(&want2).Error; err != nil {
+		t.Error(err)
+	}
+
+	want := []Level1{want1, want2}
+
+	var got []Level1
+	err := DB.Preload("Level2.Level3.Level4s").Find(&got).Error
 	if err != nil {
 		t.Error(err)
 	}

@@ -5,7 +5,6 @@ import (
 	"reflect"
 
 	"github.com/jinzhu/gorm"
-	"github.com/jinzhu/now"
 
 	"testing"
 	"time"
@@ -56,6 +55,24 @@ func TestFirstAndLastWithNoStdPrimaryKey(t *testing.T) {
 	}
 }
 
+func TestFirstAndLastWithRaw(t *testing.T) {
+	user1 := User{Name: "user", Emails: []Email{{Email: "user1@example.com"}}}
+	user2 := User{Name: "user", Emails: []Email{{Email: "user2@example.com"}}}
+	DB.Save(&user1)
+	DB.Save(&user2)
+
+	var user3, user4 User
+	DB.Raw("select * from users WHERE name = ?", "user").First(&user3)
+	if user3.Id != user1.Id {
+		t.Errorf("Find first record with raw")
+	}
+
+	DB.Raw("select * from users WHERE name = ?", "user").Last(&user4)
+	if user4.Id != user2.Id {
+		t.Errorf("Find last record with raw")
+	}
+}
+
 func TestUIntPrimaryKey(t *testing.T) {
 	var animal Animal
 	DB.First(&animal, uint64(1))
@@ -100,9 +117,9 @@ func TestFindAsSliceOfPointers(t *testing.T) {
 }
 
 func TestSearchWithPlainSQL(t *testing.T) {
-	user1 := User{Name: "PlainSqlUser1", Age: 1, Birthday: now.MustParse("2000-1-1")}
-	user2 := User{Name: "PlainSqlUser2", Age: 10, Birthday: now.MustParse("2010-1-1")}
-	user3 := User{Name: "PlainSqlUser3", Age: 20, Birthday: now.MustParse("2020-1-1")}
+	user1 := User{Name: "PlainSqlUser1", Age: 1, Birthday: parseTime("2000-1-1")}
+	user2 := User{Name: "PlainSqlUser2", Age: 10, Birthday: parseTime("2010-1-1")}
+	user3 := User{Name: "PlainSqlUser3", Age: 20, Birthday: parseTime("2020-1-1")}
 	DB.Save(&user1).Save(&user2).Save(&user3)
 	scopedb := DB.Where("name LIKE ?", "%PlainSqlUser%")
 
@@ -130,7 +147,7 @@ func TestSearchWithPlainSQL(t *testing.T) {
 		t.Errorf("Should found 2 users age != 20, but got %v", len(users))
 	}
 
-	scopedb.Where("birthday > ?", now.MustParse("2000-1-1")).Find(&users)
+	scopedb.Where("birthday > ?", parseTime("2000-1-1")).Find(&users)
 	if len(users) != 2 {
 		t.Errorf("Should found 2 users's birthday > 2000-1-1, but got %v", len(users))
 	}
@@ -174,9 +191,9 @@ func TestSearchWithPlainSQL(t *testing.T) {
 }
 
 func TestSearchWithStruct(t *testing.T) {
-	user1 := User{Name: "StructSearchUser1", Age: 1, Birthday: now.MustParse("2000-1-1")}
-	user2 := User{Name: "StructSearchUser2", Age: 10, Birthday: now.MustParse("2010-1-1")}
-	user3 := User{Name: "StructSearchUser3", Age: 20, Birthday: now.MustParse("2020-1-1")}
+	user1 := User{Name: "StructSearchUser1", Age: 1, Birthday: parseTime("2000-1-1")}
+	user2 := User{Name: "StructSearchUser2", Age: 10, Birthday: parseTime("2010-1-1")}
+	user3 := User{Name: "StructSearchUser3", Age: 20, Birthday: parseTime("2020-1-1")}
 	DB.Save(&user1).Save(&user2).Save(&user3)
 
 	if DB.Where(user1.Id).First(&User{}).RecordNotFound() {
@@ -221,10 +238,10 @@ func TestSearchWithStruct(t *testing.T) {
 
 func TestSearchWithMap(t *testing.T) {
 	companyID := 1
-	user1 := User{Name: "MapSearchUser1", Age: 1, Birthday: now.MustParse("2000-1-1")}
-	user2 := User{Name: "MapSearchUser2", Age: 10, Birthday: now.MustParse("2010-1-1")}
-	user3 := User{Name: "MapSearchUser3", Age: 20, Birthday: now.MustParse("2020-1-1")}
-	user4 := User{Name: "MapSearchUser4", Age: 30, Birthday: now.MustParse("2020-1-1"), CompanyID: &companyID}
+	user1 := User{Name: "MapSearchUser1", Age: 1, Birthday: parseTime("2000-1-1")}
+	user2 := User{Name: "MapSearchUser2", Age: 10, Birthday: parseTime("2010-1-1")}
+	user3 := User{Name: "MapSearchUser3", Age: 20, Birthday: parseTime("2020-1-1")}
+	user4 := User{Name: "MapSearchUser4", Age: 30, Birthday: parseTime("2020-1-1"), CompanyID: &companyID}
 	DB.Save(&user1).Save(&user2).Save(&user3).Save(&user4)
 
 	var user User
@@ -267,9 +284,9 @@ func TestSearchWithMap(t *testing.T) {
 }
 
 func TestSearchWithEmptyChain(t *testing.T) {
-	user1 := User{Name: "ChainSearchUser1", Age: 1, Birthday: now.MustParse("2000-1-1")}
-	user2 := User{Name: "ChainearchUser2", Age: 10, Birthday: now.MustParse("2010-1-1")}
-	user3 := User{Name: "ChainearchUser3", Age: 20, Birthday: now.MustParse("2020-1-1")}
+	user1 := User{Name: "ChainSearchUser1", Age: 1, Birthday: parseTime("2000-1-1")}
+	user2 := User{Name: "ChainearchUser2", Age: 10, Birthday: parseTime("2010-1-1")}
+	user3 := User{Name: "ChainearchUser3", Age: 20, Birthday: parseTime("2020-1-1")}
 	DB.Save(&user1).Save(&user2).Save(&user3)
 
 	if DB.Where("").Where("").First(&User{}).Error != nil {
@@ -628,6 +645,8 @@ func TestSelectWithVariables(t *testing.T) {
 			t.Errorf("Should only contains one column")
 		}
 	}
+
+	rows.Close()
 }
 
 func TestSelectWithArrayInput(t *testing.T) {
