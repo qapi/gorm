@@ -96,6 +96,33 @@ func TestPreload(t *testing.T) {
 	}
 }
 
+func TestAutoPreload(t *testing.T) {
+	user1 := getPreloadUser("auto_user1")
+	DB.Save(user1)
+
+	preloadDB := DB.Set("gorm:auto_preload", true).Where("role = ?", "Preload")
+	var user User
+	preloadDB.Find(&user)
+	checkUserHasPreloadData(user, t)
+
+	user2 := getPreloadUser("auto_user2")
+	DB.Save(user2)
+
+	var users []User
+	preloadDB.Find(&users)
+
+	for _, user := range users {
+		checkUserHasPreloadData(user, t)
+	}
+
+	var users2 []*User
+	preloadDB.Find(&users2)
+
+	for _, user := range users2 {
+		checkUserHasPreloadData(*user, t)
+	}
+}
+
 func TestNestedPreload1(t *testing.T) {
 	type (
 		Level1 struct {
@@ -595,11 +622,11 @@ func TestNestedPreload9(t *testing.T) {
 		Level2_1: Level2_1{
 			Level1s: []Level1{
 				{
-					Value: "value3-3",
+					Value:   "value3-3",
 					Level0s: []Level0{},
 				},
 				{
-					Value: "value4-4",
+					Value:   "value4-4",
 					Level0s: []Level0{},
 				},
 			},
@@ -664,7 +691,7 @@ func TestNestedPreload10(t *testing.T) {
 			},
 		},
 		{
-			Value: "bar 2",
+			Value:    "bar 2",
 			LevelA3s: []*LevelA3{},
 		},
 	}
@@ -798,7 +825,7 @@ func TestNestedPreload12(t *testing.T) {
 }
 
 func TestManyToManyPreloadWithMultiPrimaryKeys(t *testing.T) {
-	if dialect := os.Getenv("GORM_DIALECT"); dialect == "" || dialect == "sqlite" {
+	if dialect := os.Getenv("GORM_DIALECT"); dialect == "" || dialect == "sqlite" || dialect == "mssql" {
 		return
 	}
 

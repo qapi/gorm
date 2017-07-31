@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/jinzhu/now"
 )
 
 func TestCreate(t *testing.T) {
@@ -58,12 +60,48 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestCreateWithExistingTimestamp(t *testing.T) {
+	user := User{Name: "CreateUserExistingTimestamp"}
+
+	timeA := now.MustParse("2016-01-01")
+	user.CreatedAt = timeA
+	user.UpdatedAt = timeA
+	DB.Save(&user)
+
+	if user.CreatedAt.Format(time.RFC3339) != timeA.Format(time.RFC3339) {
+		t.Errorf("CreatedAt should not be changed")
+	}
+
+	if user.UpdatedAt.Format(time.RFC3339) != timeA.Format(time.RFC3339) {
+		t.Errorf("UpdatedAt should not be changed")
+	}
+
+	var newUser User
+	DB.First(&newUser, user.Id)
+
+	if newUser.CreatedAt.Format(time.RFC3339) != timeA.Format(time.RFC3339) {
+		t.Errorf("CreatedAt should not be changed")
+	}
+
+	if newUser.UpdatedAt.Format(time.RFC3339) != timeA.Format(time.RFC3339) {
+		t.Errorf("UpdatedAt should not be changed")
+	}
+}
+
+type AutoIncrementUser struct {
+	User
+	Sequence uint `gorm:"AUTO_INCREMENT"`
+}
+
 func TestCreateWithAutoIncrement(t *testing.T) {
 	if dialect := os.Getenv("GORM_DIALECT"); dialect != "postgres" {
 		t.Skip("Skipping this because only postgres properly support auto_increment on a non-primary_key column")
 	}
-	user1 := User{}
-	user2 := User{}
+
+	DB.AutoMigrate(&AutoIncrementUser{})
+
+	user1 := AutoIncrementUser{}
+	user2 := AutoIncrementUser{}
 
 	DB.Create(&user1)
 	DB.Create(&user2)
@@ -126,7 +164,7 @@ func TestAnonymousScanner(t *testing.T) {
 		t.Errorf("Should be able to get anonymous scanner")
 	}
 
-	if !user2.IsAdmin() {
+	if !user2.Role.IsAdmin() {
 		t.Errorf("Should be able to get anonymous scanner")
 	}
 }
@@ -175,6 +213,6 @@ func TestOmitWithCreate(t *testing.T) {
 
 	if queryuser.BillingAddressID.Int64 != 0 || queryuser.ShippingAddressId == 0 ||
 		queryuser.CreditCard.ID != 0 || len(queryuser.Emails) != 0 {
-		t.Errorf("Should not create omited relationships")
+		t.Errorf("Should not create omitted relationships")
 	}
 }
